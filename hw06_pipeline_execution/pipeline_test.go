@@ -47,8 +47,7 @@ func TestPipeline(t *testing.T) {
 			}
 			close(in)
 		}()
-
-		result := make([]string, 0, 10)
+		result := make([]string, 0, 5)
 		start := time.Now()
 		for s := range ExecutePipeline(in, nil, stages...) {
 			result = append(result, s.(string))
@@ -80,8 +79,7 @@ func TestPipeline(t *testing.T) {
 			}
 			close(in)
 		}()
-
-		result := make([]string, 0, 10)
+		result := make([]string, 0, 5)
 		start := time.Now()
 		for s := range ExecutePipeline(in, done, stages...) {
 			result = append(result, s.(string))
@@ -137,14 +135,170 @@ func TestAllStageStop(t *testing.T) {
 			}
 			close(in)
 		}()
-
-		result := make([]string, 0, 10)
+		result := make([]string, 0, 5)
 		for s := range ExecutePipeline(in, done, stages...) {
 			result = append(result, s.(string))
 		}
 		wg.Wait()
-
 		require.Len(t, result, 0)
-
 	})
+}
+
+// Нет стейджей (pipeline = passthrough).
+func TestPipelineNoStages(t *testing.T) {
+	in := make(Bi)
+	go func() {
+		in <- 1
+		in <- 2
+		in <- 3
+		close(in)
+	}()
+	result := make([]int, 0, 3)
+	for v := range ExecutePipeline(in, nil) {
+		result = append(result, v.(int))
+	}
+
+	require.Equal(t, []int{1, 2, 3}, result)
+}
+
+// done закрыт до старта пайплайна.
+func TestPipelineDoneBeforeStart(t *testing.T) {
+	in := make(Bi)
+	done := make(Bi)
+	close(done)
+
+	go func() {
+		in <- 1
+		in <- 2
+		close(in)
+	}()
+	result := make([]interface{}, 0, 2)
+	for v := range ExecutePipeline(in, done,
+		func(in In) Out {
+			out := make(Bi)
+			go func() {
+				defer close(out)
+				for v := range in {
+					out <- v
+				}
+			}()
+			return out
+		},
+	) {
+		result = append(result, v)
+	}
+
+	require.Empty(t, result)
+}
+
+// Медленный потребитель (важно для backpressure).
+func TestPipelineSlowConsumer(t *testing.T) {
+	in := make(Bi)
+
+	stage := func(in In) Out {
+		out := make(Bi)
+		go func() {
+			defer close(out)
+			for v := range in {
+				out <- v.(int) * 2
+			}
+		}()
+		return out
+	}
+
+	go func() {
+		for i := 0; i < 5; i++ {
+			in <- i
+		}
+		close(in)
+	}()
+	result := make([]int, 0, 5)
+	for v := range ExecutePipeline(in, nil, stage) {
+		time.Sleep(10 * time.Millisecond) // медленный consumer
+		result = append(result, v.(int))
+	}
+
+	require.Equal(t, []int{0, 2, 4, 6, 8}, result)
+}
+
+// Стейдж не читает вход (защита от утечек).
+func TestPipelineStageStopsReading(t *testing.T) {
+	in := make(Bi)
+	done := make(Bi)
+
+	stage := func(in In) Out {
+		out := make(Bi)
+		go func() {
+			defer close(out)
+			// читаем только один элемент и выходим
+			if v, ok := <-in; ok {
+				out <- v
+			}
+		}()
+		return out
+	}
+
+	go func() {
+		in <- 1
+		in <- 2
+		in <- 3
+		close(in)
+	}()
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		close(done)
+	}()
+	result := make([]int, 0, 1)
+	for v := range ExecutePipeline(in, done, stage) {
+		result = append(result, v.(int))
+	}
+
+	require.LessOrEqual(t, len(result), 1)
+}
+
+// Параллельность реально есть (не последовательное выполнение).
+func TestPipelineStagesOverlap(t *testing.T) {
+	in := make(Bi)
+
+	var mu sync.Mutex
+	active := 0
+	maxActive := 0
+
+	stage := func(in In) Out {
+		out := make(Bi)
+		go func() {
+			defer close(out)
+			for v := range in {
+				mu.Lock()
+				active++
+				if active > maxActive {
+					maxActive = active
+				}
+				mu.Unlock()
+
+				time.Sleep(100 * time.Millisecond)
+
+				mu.Lock()
+				active--
+				mu.Unlock()
+
+				out <- v
+			}
+		}()
+		return out
+	}
+
+	go func() {
+		for i := 0; i < 3; i++ {
+			in <- i
+		}
+		close(in)
+	}()
+
+	for range ExecutePipeline(in, nil, stage, stage, stage) {
+		_ = struct{}{}
+	}
+
+	require.Greater(t, maxActive, 1)
 }
