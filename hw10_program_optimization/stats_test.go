@@ -1,3 +1,4 @@
+//go:build !bench
 // +build !bench
 
 package hw10programoptimization
@@ -35,5 +36,72 @@ func TestGetDomainStat(t *testing.T) {
 		result, err := GetDomainStat(bytes.NewBufferString(data), "unknown")
 		require.NoError(t, err)
 		require.Equal(t, DomainStat{}, result)
+	})
+
+	// Новые тесты:
+
+	t.Run("case insensitive domain matching", func(t *testing.T) {
+		// Проверяем, что домен ищется без учёта регистра
+		result, err := GetDomainStat(bytes.NewBufferString(data), "COM")
+		require.NoError(t, err)
+		require.Equal(t, DomainStat{
+			"browsecat.com": 2,
+			"linktype.com":  1,
+		}, result)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		result, err := GetDomainStat(bytes.NewBufferString(""), "com")
+		require.NoError(t, err)
+		require.Empty(t, result)
+	})
+
+	t.Run("input with empty lines", func(t *testing.T) {
+		dataWithEmptyLines := "\n\n" + data + "\n\n"
+		result, err := GetDomainStat(bytes.NewBufferString(dataWithEmptyLines), "com")
+		require.NoError(t, err)
+		require.Equal(t, DomainStat{
+			"browsecat.com": 2,
+			"linktype.com":  1,
+		}, result)
+	})
+
+	t.Run("email without @", func(t *testing.T) {
+		invalidData := `{"Id":1,"Email":"invalid-email"}`
+		result, err := GetDomainStat(bytes.NewBufferString(invalidData), "com")
+		require.NoError(t, err)
+		require.Empty(t, result)
+	})
+
+	t.Run("email with multiple @", func(t *testing.T) {
+		// Согласно RFC, в email может быть только один @, но на практике...
+		// Мы используем LastIndex, так что возьмём часть после последнего @
+		multiAtData := `{"Id":1,"Email":"user@sub.domain@evil.com"}`
+		result, err := GetDomainStat(bytes.NewBufferString(multiAtData), "com")
+		require.NoError(t, err)
+		require.Equal(t, DomainStat{"evil.com": 1}, result)
+	})
+
+	t.Run("exact suffix match only", func(t *testing.T) {
+		// Убедимся, что "ocom" не совпадает с "com"
+		trickyData := `{"Id":1,"Email":"test@fakeocom"}`
+		result, err := GetDomainStat(bytes.NewBufferString(trickyData), "com")
+		require.NoError(t, err)
+		require.Empty(t, result)
+	})
+
+	t.Run("domain with subdomains", func(t *testing.T) {
+		subdomainData := `{"Id":1,"Email":"user@mail.sub.example.com"}`
+		result, err := GetDomainStat(bytes.NewBufferString(subdomainData), "com")
+		require.NoError(t, err)
+		require.Equal(t, DomainStat{"mail.sub.example.com": 1}, result)
+	})
+
+	t.Run("non-ASCII domains (IDN)", func(t *testing.T) {
+		// Проверяем корректность работы с нижним регистром для кириллицы
+		idnData := `{"Id":1,"Email":"user@ПРИМЕР.РФ"}`
+		result, err := GetDomainStat(bytes.NewBufferString(idnData), "рф")
+		require.NoError(t, err)
+		require.Equal(t, DomainStat{"пример.рф": 1}, result)
 	})
 }
