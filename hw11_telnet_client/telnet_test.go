@@ -63,3 +63,84 @@ func TestTelnetClient(t *testing.T) {
 		wg.Wait()
 	})
 }
+
+func TestTelnetClient_ConnectError(t *testing.T) {
+	// Тест проверяет поведение клиента при неудачном подключении к несуществующему серверу
+	// Используется неправильный адрес, чтобы вызвать ошибку подключения
+	timeout, err := time.ParseDuration("1s")
+	require.NoError(t, err)
+
+	client := NewTelnetClient("127.0.0.1:9999", timeout, io.NopCloser(&bytes.Buffer{}), &bytes.Buffer{})
+	err = client.Connect()
+	require.Error(t, err)
+	// Ожидается, что будет ошибка подключения
+}
+
+func TestTelnetClient_SendError(t *testing.T) {
+	// Тест проверяет поведение при попытке отправки данных в закрытое соединение
+	// Создаём клиент и подключаемся к локальному серверу
+	l, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, l.Close()) }()
+
+	timeout, err := time.ParseDuration("10s")
+	require.NoError(t, err)
+
+	in := &bytes.Buffer{}
+	out := &bytes.Buffer{}
+
+	client := NewTelnetClient(l.Addr().String(), timeout, io.NopCloser(in), out)
+	require.NoError(t, client.Connect())
+
+	// Закрываем соединение вручную
+	client.Close()
+
+	// Пытаемся отправить данные — это должно привести к ошибке
+	err = client.Send()
+	require.Error(t, err)
+	// Ожидается, что будет ошибка отправки
+}
+
+func TestTelnetClient_ReceiveError(t *testing.T) {
+	// Тест проверяет поведение при получении данных из закрытого соединения
+	l, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, l.Close()) }()
+
+	timeout, err := time.ParseDuration("10s")
+	require.NoError(t, err)
+
+	in := &bytes.Buffer{}
+	out := &bytes.Buffer{}
+
+	client := NewTelnetClient(l.Addr().String(), timeout, io.NopCloser(in), out)
+	require.NoError(t, client.Connect())
+
+	// Закрываем соединение вручную
+	client.Close()
+
+	// Пытаемся получить данные — это должно привести к ошибке
+	err = client.Receive()
+	require.Error(t, err)
+	// Ожидается, что будет ошибка получения
+}
+
+func TestTelnetClient_Close(t *testing.T) {
+	// Тест проверяет корректность закрытия соединения
+	l, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, l.Close()) }()
+
+	timeout, err := time.ParseDuration("10s")
+	require.NoError(t, err)
+
+	in := &bytes.Buffer{}
+	out := &bytes.Buffer{}
+
+	client := NewTelnetClient(l.Addr().String(), timeout, io.NopCloser(in), out)
+	require.NoError(t, client.Connect())
+
+	// Вызываем Close и проверяем, что ошибок нет
+	err = client.Close()
+	require.NoError(t, err)
+}
