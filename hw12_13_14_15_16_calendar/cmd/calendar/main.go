@@ -1,61 +1,45 @@
 package main
 
 import (
-	"context"
-	"flag"
+	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/fixme_my_friend/hw12_13_14_15_calendar/internal/app"
-	"github.com/fixme_my_friend/hw12_13_14_15_calendar/internal/logger"
-	internalhttp "github.com/fixme_my_friend/hw12_13_14_15_calendar/internal/server/http"
-	memorystorage "github.com/fixme_my_friend/hw12_13_14_15_calendar/internal/storage/memory"
+	_ "github.com/lib/pq"
+	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/config"
+	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/app"
+	"github.com/spf13/cobra"
 )
 
-var configFile string
-
-func init() {
-	flag.StringVar(&configFile, "config", "/etc/calendar/config.toml", "Path to configuration file")
-}
+var configPath string
 
 func main() {
-	flag.Parse()
-
-	if flag.Arg(0) == "version" {
-		printVersion()
-		return
+	rootCmd := &cobra.Command{
+		Use:   "calendar",
+		Short: "Calendar service skeleton",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			cfg, err := config.LoadConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			app := app.New(cfg)
+			return app.Run()
+		},
 	}
 
-	config := NewConfig()
-	logg := logger.New(config.Logger.Level)
+	// Подкоманда `version`
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Show version info",
+		Run: func(_ *cobra.Command, _ []string) {
+			printVersion()
+		},
+	}
 
-	storage := memorystorage.New()
-	calendar := app.New(logg, storage)
+	rootCmd.Flags().StringVar(&configPath, "config", "config.yaml", "path to config file")
+	rootCmd.AddCommand(versionCmd)
 
-	server := internalhttp.NewServer(logg, calendar)
-
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	defer cancel()
-
-	go func() {
-		<-ctx.Done()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer cancel()
-
-		if err := server.Stop(ctx); err != nil {
-			logg.Error("failed to stop http server: " + err.Error())
-		}
-	}()
-
-	logg.Info("calendar is running...")
-
-	if err := server.Start(ctx); err != nil {
-		logg.Error("failed to start http server: " + err.Error())
-		cancel()
-		os.Exit(1) //nolint:gocritic
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
