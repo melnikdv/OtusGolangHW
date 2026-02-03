@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/config"
 	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/logger"
+	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/migration"
 	grpcserver "github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/server/grpc"
 	httpserver "github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/server/http"
 	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/storage"
@@ -41,6 +42,18 @@ func main() {
 				s, err := sqlstorage.New(cfg.Storage.SQL.DSN, logg)
 				if err != nil {
 					return fmt.Errorf("failed to init SQL storage: %w", err)
+				}
+				// Применяем миграции только в calendar
+				logg.Info("Applying database migrations")
+				applied, err := migration.Apply(s.DB())
+				if err != nil {
+					logg.WithError(err).Errorf("Migration '%s' failed", migration.MigrationName)
+					return fmt.Errorf("failed to apply migration: %w", err)
+				}
+				if applied {
+					logg.Infof("Migration '%s' - applied successfully", migration.MigrationName)
+				} else {
+					logg.Infof("Migration '%s' - already applied", migration.MigrationName)
 				}
 				store = s
 			default:
@@ -96,7 +109,7 @@ func main() {
 		},
 	}
 
-	rootCmd.Flags().StringVar(&configPath, "config", "configs/config.yaml", "path to config file")
+	rootCmd.Flags().StringVar(&configPath, "config", "configs/calendar.yaml", "path to config file")
 	rootCmd.AddCommand(versionCmd)
 
 	if err := rootCmd.Execute(); err != nil {
