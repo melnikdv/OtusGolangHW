@@ -1,66 +1,74 @@
 package hw10programoptimization
 
 import (
-	"encoding/json"
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 )
-
-type User struct {
-	ID       int
-	Name     string
-	Username string
-	Email    string
-	Phone    string
-	Password string
-	Address  string
-}
 
 type DomainStat map[string]int
 
 func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
-	u, err := getUsers(r)
-	if err != nil {
-		return nil, fmt.Errorf("get users error: %w", err)
-	}
-	return countDomains(u, domain)
-}
-
-type users [100_000]User
-
-func getUsers(r io.Reader) (result users, err error) {
-	content, err := io.ReadAll(r)
-	if err != nil {
-		return
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
-		var user User
-		if err = json.Unmarshal([]byte(line), &user); err != nil {
-			return
-		}
-		result[i] = user
-	}
-	return
-}
-
-func countDomains(u users, domain string) (DomainStat, error) {
+	domainSuffix := "." + strings.ToLower(domain)
 	result := make(DomainStat)
+	scanner := bufio.NewScanner(r)
+	emailKey := []byte(`"Email":"`)
 
-	for _, user := range u {
-		matched, err := regexp.Match("\\."+domain, []byte(user.Email))
-		if err != nil {
-			return nil, err
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
 		}
 
-		if matched {
-			num := result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])]
-			num++
-			result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])] = num
+		// Быстрый поиск начала email
+		start := bytes.Index(line, emailKey)
+		if start == -1 {
+			continue
 		}
+
+		valueStart := start + len(emailKey)
+		if valueStart >= len(line) {
+			continue
+		}
+
+		// Ищем закрывающую кавычку
+		end := valueStart
+		for end < len(line) && line[end] != '"' {
+			end++
+		}
+		if end <= valueStart {
+			continue
+		}
+
+		email := line[valueStart:end]
+		at := bytes.LastIndexByte(email, '@')
+		if at == -1 {
+			continue
+		}
+
+		domainPart := email[at+1:]
+		if len(domainPart) == 0 {
+			continue
+		}
+
+		domainStr := strings.ToLower(string(domainPart))
+
+		// Проверка суффикса
+		if len(domainStr) <= len(domainSuffix) {
+			continue
+		}
+		if domainStr[len(domainStr)-len(domainSuffix):] != domainSuffix {
+			continue
+		}
+
+		result[domainStr]++
 	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan error: %w", err)
+	}
+
 	return result, nil
 }
