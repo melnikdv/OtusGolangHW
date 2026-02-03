@@ -206,3 +206,32 @@ func TestValidate_NotStruct(t *testing.T) {
 		t.Fatalf("expected ErrNotStruct, got %v", err)
 	}
 }
+
+// Ошибка разработчика: validate на неподдерживаемом типе.
+func TestValidate_UnsupportedType_IsProgramError(t *testing.T) {
+	type BadStruct struct {
+		Data map[string]string `validate:"len:5"`
+	}
+
+	err := Validate(BadStruct{
+		Data: map[string]string{"a": "b"},
+	})
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Это не должна быть ValidationErrors
+	var vErrs ValidationErrors
+	if errors.As(err, &vErrs) {
+		t.Fatalf(
+			"expected program error, got ValidationErrors: %v",
+			vErrs,
+		)
+	}
+
+	// Можно дополнительно проверить тип ошибки
+	if !errors.Is(err, ErrInvalidRule) {
+		t.Fatalf("expected ErrInvalidRule, got %v", err)
+	}
+}

@@ -40,6 +40,12 @@ func (v ValidationErrors) Error() string {
 	return b.String()
 }
 
+func isProgramError(err error) bool {
+	return errors.Is(err, ErrInvalidRule) ||
+		errors.Is(err, ErrInvalidTag) ||
+		errors.Is(err, ErrInvalidRegexp)
+}
+
 func Validate(v interface{}) error {
 	value := reflect.ValueOf(v)
 	if value.Kind() != reflect.Struct {
@@ -56,7 +62,15 @@ func Validate(v interface{}) error {
 		}
 
 		fieldValue := value.Field(i)
-		if fieldErr := validateField(field.Name, fieldValue, field.Tag.Get("validate")); fieldErr.Err != nil {
+		fieldErr := validateField(field.Name, fieldValue, field.Tag.Get("validate"))
+
+		if fieldErr.Err != nil {
+			// program error — сразу возвращаем
+			if isProgramError(fieldErr.Err) {
+				return fieldErr.Err
+			}
+
+			// validation error — накапливаем
 			errs = append(errs, fieldErr)
 		}
 	}
@@ -83,7 +97,7 @@ func validateField(fieldName string, value reflect.Value, tag string) Validation
 	case kind == reflect.Slice:
 		return validateSliceField(fieldName, value, rules)
 	default:
-		return ValidationError{Field: fieldName, Err: ErrInvalidRule}
+		return ValidationError{Err: ErrInvalidRule}
 	}
 }
 
