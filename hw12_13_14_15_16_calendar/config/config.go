@@ -16,8 +16,9 @@ const (
 
 type Config struct {
 	Server struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		GRPCPort int    `yaml:"grpc_port"`
 	} `yaml:"server"`
 	Logger struct {
 		Level string `yaml:"level"` // debug, info, warn, error
