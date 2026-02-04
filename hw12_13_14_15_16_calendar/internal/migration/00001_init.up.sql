@@ -5,5 +5,6 @@ CREATE TABLE IF NOT EXISTS events (
                                       duration BIGINT NOT NULL,
                                       description TEXT,
                                       user_id TEXT NOT NULL,
-                                      notify_before BIGINT
+                                      notify_before BIGINT,
+                                      notified BOOLEAN DEFAULT FALSE
 );

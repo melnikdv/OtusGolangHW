@@ -1,0 +1,10 @@
+logger:
+  level: "info"
+storage:
+  type: "sql"
+  sql:
+    dsn: "host=localhost port=5432 user=calendar password=calendar dbname=calendar sslmode=disable"
+rmq:
+  url: "amqp://rabbit:password@localhost:5672/"
+  queue: "notifications"
+interval: "5s" # каждую минуту

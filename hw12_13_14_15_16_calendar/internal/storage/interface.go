@@ -18,6 +18,7 @@ type Event struct {
 	Description  string    `db:"description"`
 	UserID       string    `db:"user_id"`
 	NotifyBefore int64     `db:"notify_before"` // seconds
+	Notified     bool      `db:"notified"`
 }
 
 type Storage interface {
@@ -27,4 +28,6 @@ type Storage interface {
 	ListDay(date time.Time) ([]Event, error)
 	ListWeek(startDate time.Time) ([]Event, error)
 	ListMonth(startDate time.Time) ([]Event, error)
+	ListUpcomingReminders(now time.Time) ([]Event, error)
+	CleanupOldEvents(before time.Time) error
 }

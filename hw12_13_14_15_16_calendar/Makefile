@@ -1,5 +1,10 @@
-BIN := "./bin/calendar"
-CONFIG := "./configs/config.yaml"
+BIN_DIR := ./bin
+BIN_CALENDAR      := $(BIN_DIR)/calendar
+BIN_SCHEDULER     := $(BIN_DIR)/calendar_scheduler
+BIN_SENDER        := $(BIN_DIR)/calendar_sender
+CALENDAR_CONFIG := "./configs/calendar.yaml"
+SCHEDULER_CONFIG := "./configs/scheduler.yaml"
+SENDER_CONFIG := "./configs/sender.yaml"
 DOCKER_IMG="calendar:develop"
 
 GIT_HASH := $(shell git log --format="%h" -n 1)
@@ -77,11 +82,48 @@ migrate:
 	done
 	@echo "✅ All migrations applied."
 
-build:
-	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
+# Цель по умолчанию
+.PHONY: build
+build: $(BIN_CALENDAR) $(BIN_SCHEDULER) $(BIN_SENDER)
 
-run: build
-	$(BIN) --config $(CONFIG)
+# Сборка calendar
+$(BIN_CALENDAR):
+	@mkdir -p $(BIN_DIR)
+	go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calendar
+
+# Сборка calendar_scheduler
+$(BIN_SCHEDULER):
+	@mkdir -p $(BIN_DIR)
+	go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calendar_scheduler
+
+# Сборка calendar_sender
+$(BIN_SENDER):
+	@mkdir -p $(BIN_DIR)
+	go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calendar_sender
+
+# Запуск отдельных сервисов
+.PHONY: run-calendar run-scheduler run-sender
+
+run-calendar:
+	$(BIN_CALENDAR) --config $(CALENDAR_CONFIG)
+
+run-scheduler:
+	$(BIN_SCHEDULER) --config $(SCHEDULER_CONFIG)
+
+run-sender:
+	$(BIN_SENDER) --config $(SENDER_CONFIG)
+
+# Запуск всех сервисов (в фоне)
+.PHONY: run-all
+run-all: build
+	@echo "Starting all services..."
+	$(BIN_CALENDAR) --config $(CALENDAR_CONFIG) &
+	$(BIN_SCHEDULER) --config $(SCHEDULER_CONFIG) &
+	$(BIN_SENDER) --config $(SENDER_CONFIG) &
+	@echo "All services started in background. PID: $$!"
+
+kill-all:
+	killall calendar calendar_scheduler calendar_sender
 
 build-img:
 	docker build \
@@ -106,5 +148,9 @@ lint: install-lint-deps
 
 generate:
 	protoc --go_out=. --go-grpc_out=. api/EventService.proto
+
+.PHONY: clean
+clean:
+	rm -f $(BIN_CALENDAR) $(BIN_SCHEDULER) $(BIN_SENDER)
 
 .PHONY: build run build-img run-img version test lint
