@@ -1,0 +1,10 @@
+server:
+  host: "0.0.0.0"
+  port: ${CALENDAR_HTTP_PORT}
+  grpc_port: ${CALENDAR_GRPC_PORT}
+logger:
+  level: "${LOG_LEVEL}"
+storage:
+  type: "sql"
+  sql:
+    dsn: "host=${POSTGRES_HOST} port=${POSTGRES_PORT} user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} sslmode=disable"

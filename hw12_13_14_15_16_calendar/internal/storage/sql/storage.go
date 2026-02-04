@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -35,7 +36,17 @@ func (s *Storage) Add(event storage.Event) error {
 		event.NotifyBefore,
 		event.Notified,
 	)
-	return err
+	if err != nil {
+		// Проверяем, является ли ошибка нарушением уникального ограничения
+		if pqErr, ok := err.(*pq.Error); ok {
+			// Код 23505 = unique_violation
+			if pqErr.Code == "23505" {
+				return storage.ErrDateBusy
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Storage) Update(id string, event storage.Event) error {

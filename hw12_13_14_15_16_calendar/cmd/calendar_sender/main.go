@@ -43,6 +43,7 @@ func main() {
 				logg.Info("shutting down calendar_sender")
 			}()
 
+			logg.Info("Starting calendar sender...")
 			return sndr.Run(ctx)
 		},
 		SilenceUsage: true,
