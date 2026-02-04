@@ -1,0 +1,25 @@
+apiVersion: v2
+name: calendar
+description: Calendar helm chart
+type: application
+version: "1.0.0"
+appVersion: "v1.0.0"
+
+dependencies:
+  - name: calendar
+    repository: file://../charts/calendar"
+    version: 1.0.0
+  - name: calendar-scheduler
+    repository: file://../charts/calendar-scheduler"
+    version: 1.0.0
+  - name: calendar-sender
+    repository: file://../charts/calendar-sender"
+    version: 1.0.0
+  - name: postgresql
+    repository: file://charts/postgresql
+    version: 17.2.0
+    condition: global.postgresql.deploy
+  - name: rabbitmq
+    repository: file://charts/rabbitmq
+    version: 16.0.14
+    condition: global.postgresql.deploy
