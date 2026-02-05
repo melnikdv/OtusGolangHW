@@ -2,6 +2,59 @@ syntax = "proto3";
 
 package event;
 
+option go_package = "./api;event";
+
+// Event представляет календарное событие.
 message Event {
-    // TODO
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  int64 start_time = 4; // Unix timestamp in nanoseconds
+  int64 end_time = 5;   // Unix timestamp in nanoseconds
+  string user_id = 6;
+  int64 notify_before = 7; // nanoseconds (optional)
+}
+
+// --- Create ---
+message CreateEventRequest {
+  Event event = 1;
+}
+message CreateEventResponse {
+  string id = 1;
+}
+
+// --- Update ---
+message UpdateEventRequest {
+  string id = 1;
+  Event event = 2;
+}
+message UpdateEventResponse {}
+
+// --- Delete ---
+message DeleteEventRequest {
+  string id = 1;
+}
+message DeleteEventResponse {}
+
+// --- List ---
+message ListEventsRequest {
+  enum Period {
+    DAY = 0;
+    WEEK = 1;
+    MONTH = 2;
+  }
+  Period period = 1;
+  int64 start_date = 2; // Unix timestamp at 00:00 of the reference day
+}
+
+message ListEventsResponse {
+  repeated Event events = 1;
+}
+
+// Основной сервис для работы с событиями.
+service EventService {
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
+  rpc UpdateEvent(UpdateEventRequest) returns (UpdateEventResponse);
+  rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 }
