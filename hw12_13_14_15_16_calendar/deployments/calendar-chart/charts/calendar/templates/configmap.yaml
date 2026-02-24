@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.appname }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.appname }}
+    app.kubernetes.io/name: "{{ .Values.appname }}"
+data:
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
