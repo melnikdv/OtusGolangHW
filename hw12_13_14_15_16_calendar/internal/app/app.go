@@ -1,50 +1,50 @@
 package app
 
 import (
-	"fmt"
+	"context"
+	"time"
 
-	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/config"
-	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/logger"
-	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/server"
 	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/storage"
-	"github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/storage/inmemory"
-	sqlstorage "github.com/melnikdv/OtusGolangHW/hw12_13_14_15_16_calendar/internal/storage/sql"
-	"github.com/sirupsen/logrus"
 )
 
 type App struct {
-	cfg    *config.Config
-	logger *logrus.Logger
+	logger Logger
 	store  storage.Storage
-	srv    *server.Server
 }
 
-func New(cfg *config.Config) *App {
-	log := logger.New(cfg.Logger.Level)
-	var store storage.Storage
-
-	switch cfg.Storage.Type {
-	case config.InMemory:
-		store = inmemory.New()
-	case config.SQL:
-		s, err := sqlstorage.New(cfg.Storage.SQL.DSN, log)
-		if err != nil {
-			panic(fmt.Sprintf("failed to init SQL storage: %v", err))
-		}
-		store = s
-	default:
-		panic("unknown storage type")
-	}
-
-	srv := server.New(log, cfg.Server.Host, cfg.Server.Port)
-	return &App{
-		cfg:    cfg,
-		logger: log,
-		store:  store,
-		srv:    srv,
-	}
+// Совместимость с *logrus.Logger
+type Logger interface {
+	Info(args ...interface{})
+	Error(args ...interface{})
+	Debug(args ...interface{})
+	Warn(args ...interface{})
 }
 
-func (a *App) Run() error {
-	return a.srv.Start()
+func New(logger Logger, store storage.Storage) *App {
+	return &App{logger: logger, store: store}
+}
+
+// Методы бизнес-логики — прокси к хранилищу
+func (a *App) CreateEvent(_ context.Context, event storage.Event) error {
+	return a.store.Add(event)
+}
+
+func (a *App) UpdateEvent(_ context.Context, id string, event storage.Event) error {
+	return a.store.Update(id, event)
+}
+
+func (a *App) DeleteEvent(_ context.Context, id string) error {
+	return a.store.Delete(id)
+}
+
+func (a *App) ListEventsForDay(_ context.Context, date time.Time) ([]storage.Event, error) {
+	return a.store.ListDay(date)
+}
+
+func (a *App) ListEventsForWeek(_ context.Context, startDate time.Time) ([]storage.Event, error) {
+	return a.store.ListWeek(startDate)
+}
+
+func (a *App) ListEventsForMonth(_ context.Context, startDate time.Time) ([]storage.Event, error) {
+	return a.store.ListMonth(startDate)
 }

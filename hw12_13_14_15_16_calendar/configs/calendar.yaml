@@ -1,0 +1,10 @@
+server:
+  host: "localhost"
+  port: 8080
+  grpc_port: 9090
+logger:
+  level: "info"
+storage:
+  type: "sql" # use: 'inmemory' or 'sql'
+  sql:
+    dsn: "host=localhost port=5432 user=calendar password=calendar dbname=calendar sslmode=disable"
