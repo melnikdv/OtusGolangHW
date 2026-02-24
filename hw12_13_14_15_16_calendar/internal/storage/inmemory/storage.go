@@ -100,3 +100,35 @@ func (s *Storage) ListMonth(startDate time.Time) ([]storage.Event, error) {
 	}
 	return result, nil
 }
+
+func (s *Storage) ListUpcomingReminders(now time.Time) ([]storage.Event, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []storage.Event
+	for _, ev := range s.events {
+		// Если NotifyBefore <= 0 — напоминание не нужно
+		if ev.NotifyBefore <= 0 || ev.Notified {
+			continue
+		}
+
+		notifyTime := ev.DateTime.Add(-time.Duration(ev.NotifyBefore) * time.Second)
+		// Напоминаем, если время напоминания наступило, но событие ещё не началось
+		if notifyTime.Before(now) && now.Before(ev.DateTime) {
+			result = append(result, ev)
+		}
+	}
+	return result, nil
+}
+
+func (s *Storage) CleanupOldEvents(before time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for id, ev := range s.events {
+		if ev.DateTime.Before(before) {
+			delete(s.events, id)
+		}
+	}
+	return nil
+}
