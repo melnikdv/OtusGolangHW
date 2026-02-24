@@ -1,0 +1,38 @@
+---
+{{- if .Values.ingress.enabled -}}
+{{- include "chart.validateValues" . }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appname }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    nginx.ingress.kubernetes.io/proxy-no-cache: "true"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "{{ .Release.Namespace }}/{{ .Values.appname }}-config"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-cache: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - "{{ .Values.appname }}.{{ .Values.global.ingress_domain }}"
+      {{- if .Values.ingress.tls.secret.enabled }}
+      secretName: "{{ .Values.ingress.tls.secret.name }}"
+      {{- end }}
+  {{- end }}
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+  - host: "{{ .Values.appname }}.{{ .Values.global.ingress_domain }}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.appname }}
+            port:
+              number: {{ .Values.service.httpPort }}
+{{- end }}

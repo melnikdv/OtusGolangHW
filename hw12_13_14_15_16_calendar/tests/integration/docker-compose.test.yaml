@@ -1,0 +1,109 @@
+name: test
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      TZ: Europe/Moscow
+      POSTGRES_USER: calendar
+      POSTGRES_PASSWORD: calendar
+      POSTGRES_DB: calendar
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U calendar -d calendar" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      TZ: Europe/Moscow
+      RABBITMQ_DEFAULT_USER: calendar
+      RABBITMQ_DEFAULT_PASS: calendar
+      RABBITMQ_DEFAULT_VHOST: /
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  calendar:
+    image: calendar:test
+    build:
+      context: ../../
+      dockerfile: build/Dockerfile.calendar
+      args:
+        LDFLAGS: ${LDFLAGS}
+    environment:
+      TZ: Europe/Moscow
+      LOG_LEVEL: info
+      CALENDAR_HTTP_PORT: 8080
+      CALENDAR_GRPC_PORT: 9090
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: calendar
+      POSTGRES_PASSWORD: calendar
+      POSTGRES_DB: calendar
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  calendar-scheduler:
+    image: calendar-scheduler:test
+    build:
+      context: ../../
+      dockerfile: build/Dockerfile.scheduler
+      args:
+        LDFLAGS: ${LDFLAGS}
+    environment:
+      TZ: Europe/Moscow
+      LOG_LEVEL: info
+      SCHEDULER_INTERVAL: 5s
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: calendar
+      POSTGRES_PASSWORD: calendar
+      POSTGRES_DB: calendar
+      RMQ_HOST: rabbitmq
+      RMQ_PORT: 5672
+      RMQ_USER: calendar
+      RMQ_PASSWORD: calendar
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  calendar-sender:
+    image: calendar-sender:test
+    build:
+      context: ../../
+      dockerfile: build/Dockerfile.sender
+      args:
+        LDFLAGS: ${LDFLAGS}
+    environment:
+      TZ: Europe/Moscow
+      LOG_LEVEL: info
+      RMQ_HOST: rabbitmq
+      RMQ_PORT: 5672
+      RMQ_USER: calendar
+      RMQ_PASSWORD: calendar
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  integration-test:
+    build:
+      context: ../..
+      dockerfile: tests/integration/Dockerfile.test
+    environment:
+      CALENDAR_API_URL: http://calendar:8080
+      TEST_DB_URL: host=postgres port=5432 user=calendar password=calendar dbname=calendar sslmode=disable
+      TEST_RMQ_URL: amqp://calendar:calendar@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      calendar:
+        condition: service_started

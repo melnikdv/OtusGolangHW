@@ -8,3 +8,5 @@ CREATE TABLE IF NOT EXISTS events (
                                       notify_before BIGINT,
                                       notified BOOLEAN DEFAULT FALSE
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_user_datetime ON events (user_id, datetime);

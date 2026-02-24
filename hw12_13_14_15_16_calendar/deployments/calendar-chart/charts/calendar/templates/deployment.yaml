@@ -1,0 +1,66 @@
+---
+{{- include "chart.validateValues" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: "{{ .Values.appname }}" 
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+    app.kubernetes.io/version: "{{ .Chart.AppVersion }}"
+    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    app.kubernetes.io/component: "{{ .Values.appname }}"
+    app.kubernetes.io/part-of: calendar
+    release: "{{ .Values.promrelease }}"
+spec:
+  revisionHistoryLimit: 15
+  replicas: {{ .Values.global.replicaCount }} 
+  strategy: {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appname }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        checksum/config: {{ .Values.global.commitTime | quote }}
+      labels:
+        app: {{ .Values.appname }} 
+        release: {{ .Values.promrelease }}
+    spec:
+      containers:
+        - name: {{ .Values.appname }} 
+          image: {{ .Values.global.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }} 
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.httpTargetPort }}
+            - name: grpc
+              containerPort: {{ .Values.service.grpcTargetPort }}
+          livenessProbe: {{- toYaml .Values.livenessProbe | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.appname }}-config
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      restartPolicy: {{ .Values.restartPolicy }}
+      {{- if .Values.global.pullsecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.pullsecrets }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault

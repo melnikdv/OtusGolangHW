@@ -1,0 +1,28 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.appname }}
+  labels:
+    app: {{ .Values.appname }}
+    release: {{ .Values.promrelease }}
+    app.kubernetes.io/name: "{{ .Values.appname }}"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+    app.kubernetes.io/version: "{{ .Chart.AppVersion }}"
+    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    app.kubernetes.io/component: "{{ .Values.appname }}"
+    app.kubernetes.io/part-of: calendar
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      protocol: {{ .Values.service.httpProtocol }}
+      targetPort: {{ .Values.service.httpTargetPort }}
+    - name: grpc
+      port: {{ .Values.service.grpcPort }}
+      protocol: {{ .Values.service.grpcProtocol }}
+      targetPort: {{ .Values.service.grpcTargetPort }}
+  selector:
+    app: {{ .Values.appname }}

@@ -23,6 +23,7 @@ require (
 )
 
 require (
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/streadway/amqp v1.1.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.34.2

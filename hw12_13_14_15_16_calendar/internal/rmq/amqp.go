@@ -3,7 +3,10 @@ package rmq
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/streadway/amqp"
 )
 
@@ -13,15 +16,28 @@ type AMQP struct {
 }
 
 func NewAMQP(url string) (*AMQP, error) {
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		return nil, err
+	var conn *amqp.Connection
+	var err error
+
+	op := func() error {
+		conn, err = amqp.Dial(url)
+		return err
 	}
+
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxInterval = 10 * time.Second
+	bo.MaxElapsedTime = 30 * time.Second
+
+	if err := backoff.Retry(op, bo); err != nil {
+		return nil, fmt.Errorf("failed to connect to RabbitMQ after retries: %w", err)
+	}
+
 	ch, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
+
 	return &AMQP{conn: conn, ch: ch}, nil
 }
 

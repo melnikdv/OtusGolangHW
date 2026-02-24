@@ -1,0 +1,16 @@
+FROM golang:1.23 AS build
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG LDFLAGS
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags "${LDFLAGS}" \
+    -o /bin/calendar_scheduler \
+    ./cmd/calendar_scheduler
+
+FROM alpine:3.23
+RUN apk --no-cache add ca-certificates tzdata gettext
+COPY --from=build /bin/calendar_scheduler /usr/local/bin/calendar_scheduler
+COPY --from=build /app/configs/scheduler.yaml.tmpl /etc/calendar/scheduler.yaml.tmpl
+CMD ["sh", "-c", "set -e; envsubst < /etc/calendar/scheduler.yaml.tmpl > /etc/calendar/scheduler.yaml && exec calendar_scheduler --config /etc/calendar/scheduler.yaml"]

@@ -1,0 +1,186 @@
+---
+global:
+  replicaCount: 1
+  image:
+    repository: nexus.inf.axel.pro/calendar-docker     # Путь к образам в docker registry (глобально)
+  version: "1.0.0"
+  appversion: "v1.0.0-dev"
+  pullsecrets:     # Здесь указывается секрет, по которому будут пуллиться образы из docker registry
+    - regcred
+  ingress_domain: "apps.sandbox.inf.axel.pro"     # Здесь указывается домен для ingress
+  storageClass: "nfs-storage-class"     # Здесь указывается storageclass, по которому будут создаваться PV
+
+  postgresql:
+    external:
+      dbname: "<external pg dbname>"
+      host: "<external pg host>"
+      port: "<external pg port>"
+      user: "<external pg user>"
+      password: "<external pg password>"
+    
+    # false - использование внешнего сервиса, данные для подключения указываются выше; true - деплой этого сервиса с помощью Helm;
+    # Также ниже можно указать собственные образы для деплоя сервисов инфраструктуры
+    deploy: true
+    image:
+      registry: nexus.inf.axel.pro
+      repository: calendar-docker/postgresql
+      tag: 17.2.0-debian-12-r6
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 150m
+        memory: 192Mi
+    persistence:
+      size: 6Gi
+
+  rabbitmq:
+    external:
+      host: "<external rmq host>"
+      port: "<external rmq port>"
+      user: "<external rmq user>"
+      password: "<external rmq password>"
+
+    # false - использование внешнего сервиса, данные для подключения указываются выше; true - деплой этого сервиса с помощью Helm;
+    # Также ниже можно указать собственные образы для деплоя сервисов инфраструктуры
+    deploy: true
+    image:
+      registry: nexus.inf.axel.pro
+      repository: calendar-docker/rabbitmq
+      tag: 4.1.3-debian-12-r1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 150m
+        memory: 192Mi
+    persistence:
+      size: 1Gi
+
+calendar:
+  annotations:
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+    prometheus.io/scrape: "true"
+  appname: calendar
+  image:
+    name: calendar
+    pullPolicy: Always
+    tag: "v1.0.0-dev"
+  restartPolicy: Always
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 20%
+  service:
+    type: ClusterIP
+    httpPort: 8080
+    httpProtocol: TCP
+    httpTargetPort: 8080
+    grpcPort: 9090
+    grpcProtocol: TCP
+    grpcTargetPort: 9090
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 3
+    failureThreshold: 30
+  ingress:
+    enabled: true
+    # Имя класса Ingress (ingressClassName).
+    className: "nginx"
+    # Настройки TLS для Ingress.
+    tls:
+      enabled: true
+      clusterIssuer: "selfsigned-issuer"
+      secret:
+        enabled: false
+        name: "<custom tls secret>"
+  env:
+    TZ: Europe/Moscow
+    LOG_LEVEL: info
+    CALENDAR_HTTP_PORT: 8080
+    CALENDAR_GRPC_PORT: 9090
+    POSTGRES_HOST: calendar-postgresql
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: calendar
+    POSTGRES_PASSWORD: calendar
+    POSTGRES_DB: calendar
+
+calendar-scheduler:
+  annotations:
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+    prometheus.io/scrape: "true"
+  appname: calendar-scheduler
+  image:
+    name: calendar-scheduler
+    pullPolicy: Always
+    tag: "v1.0.0-dev"
+  restartPolicy: Always
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 20%
+  env:
+    TZ: Europe/Moscow
+    LOG_LEVEL: info
+    SCHEDULER_INTERVAL: 5s
+    POSTGRES_HOST: calendar-postgresql
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: calendar
+    POSTGRES_PASSWORD: calendar
+    POSTGRES_DB: calendar
+    RMQ_HOST: calendar-rabbitmq
+    RMQ_PORT: 5672
+    RMQ_USER: calendar
+    RMQ_PASSWORD: calendar
+
+calendar-sender:
+  annotations:
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+    prometheus.io/scrape: "true"
+  appname: calendar-sender
+  image:
+    name: calendar-sender
+    pullPolicy: Always
+    tag: "v1.0.0-dev"
+  restartPolicy: Always
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 20%
+  env:
+    TZ: Europe/Moscow
+    LOG_LEVEL: info
+    RMQ_HOST: calendar-rabbitmq
+    RMQ_PORT: 5672
+    RMQ_USER: calendar
+    RMQ_PASSWORD: calendar
